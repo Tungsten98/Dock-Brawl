@@ -17,7 +17,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField]
     float m_MaxFallSpeed = 20.0f;
 
-    // The character's jump height
+	// The character's jump height 
     [SerializeField]
     float m_JumpHeight = 4.0f;
 
@@ -39,6 +39,12 @@ public class PlayerController : MonoBehaviour
     // The current vertical / falling speed
     float m_VerticalSpeed = 0.0f;
 
+	// Added field:
+	Vector3 m_PushedDirection = Vector3.zero;
+
+	// Added field:
+	float m_PushedSpeed = 0.0f;
+
     // The current movement offset
     Vector3 m_CurrentMovementOffset = Vector3.zero;
 
@@ -47,6 +53,9 @@ public class PlayerController : MonoBehaviour
 
     // Whether the player is alive or not
     bool m_IsAlive = true;
+
+	// Added field: To ensure that the push is only evaluated once (fixed irregular movement bug from jumping)
+	bool m_HasCollidedWithPlayer = false;
 
     // The time it takes to respawn
     const float MAX_RESPAWN_TIME = 1.0f;
@@ -80,14 +89,40 @@ public class PlayerController : MonoBehaviour
         m_VerticalSpeed = Mathf.Min(m_VerticalSpeed, m_MaxFallSpeed);
     }
 
+	// Added method: 
+	void OnControllerColliderHit (ControllerColliderHit other)
+	{
+		if (!other.gameObject.CompareTag ("Player")) 
+		{
+			m_HasCollidedWithPlayer = false;
+			return;
+		}
+
+		PlayerController otherPlayer = other.gameObject.GetComponent<PlayerController> ();
+
+		if (!m_HasCollidedWithPlayer) 
+		{
+			otherPlayer.m_PushedDirection = m_MovementDirection;
+			otherPlayer.m_PushedSpeed = m_MovementSpeed;
+			m_HasCollidedWithPlayer = true;
+		}
+	}
+
     void UpdateMovementState()
     {
         // Get Player's movement input and determine direction and set run speed
         float horizontalInput = Input.GetAxisRaw("Horizontal" + m_PlayerInputString);
         float verticalInput = Input.GetAxisRaw("Vertical" + m_PlayerInputString);
 
-        m_MovementDirection = new Vector3(horizontalInput, 0, verticalInput);
-        m_MovementSpeed = m_RunSpeed;
+		Vector3 actualMovementDirection = new Vector3 (horizontalInput, 0, verticalInput) + m_PushedDirection;
+		float actualMovementSpeed = m_RunSpeed + m_PushedSpeed;
+
+		m_MovementDirection = actualMovementDirection;
+		m_MovementSpeed = actualMovementSpeed;
+
+		// Reset the pushed direction and speed
+		m_PushedDirection = Vector3.zero;
+		m_PushedSpeed = 0.0f;
     }
 
     void UpdateJumpState()
