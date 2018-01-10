@@ -25,13 +25,25 @@ public class PlayerController : MonoBehaviour
     [SerializeField]
     string m_PlayerInputString = "_P1";
 
+	// Added field: 
+	public float m_Drag = 0.5f;
+
     // --------------------------------------------------------------
 
     // The charactercontroller of the player
     CharacterController m_CharacterController;
 
+	// Added field:
+	Animator m_Animator;
+
+	// Added field:
+	PlayerAttack m_PlayerAttack;
+
     // The current movement direction in x & z.
     Vector3 m_MovementDirection = Vector3.zero;
+
+	// Added field:
+	Vector3 m_FaceDirection = Vector3.zero;
 
     // The current movement speed
     float m_MovementSpeed = 0.0f;
@@ -57,6 +69,13 @@ public class PlayerController : MonoBehaviour
 	// Added field: To ensure that the push is only evaluated once (fixed irregular movement bug from jumping)
 	bool m_HasCollidedWithPlayer = false;
 
+	// Added field:
+	bool m_IsAttacked = false;
+
+	// Added fields:
+	const float PUNCH_COOLDOWN = 0.5f;
+	float m_LastPunchTime = 0.0f;
+
     // The time it takes to respawn
     const float MAX_RESPAWN_TIME = 1.0f;
     float m_RespawnTime = MAX_RESPAWN_TIME;
@@ -66,6 +85,8 @@ public class PlayerController : MonoBehaviour
     void Awake()
     {
         m_CharacterController = GetComponent<CharacterController>();
+		m_Animator = GetComponent<Animator> ();
+		m_PlayerAttack = GetComponentInChildren<PlayerAttack> ();
     }
 
     // Use this for initialization
@@ -88,6 +109,22 @@ public class PlayerController : MonoBehaviour
         m_VerticalSpeed = Mathf.Max(m_VerticalSpeed, -m_MaxFallSpeed);
         m_VerticalSpeed = Mathf.Min(m_VerticalSpeed, m_MaxFallSpeed);
     }
+
+	// Added method:
+	public void PushBackFromAttack(Vector3 pushDirection, float pushStrength)
+	{
+		m_IsAttacked = true;
+		m_PushedDirection = pushDirection;
+
+		// We treat m_RunSpeed as 1 unit of speed
+		m_PushedSpeed = m_RunSpeed * pushStrength;
+	}
+
+	// Added method:
+	public Vector3 GetCurrentFaceDirection()
+	{
+		return m_FaceDirection;
+	}
 
 	// Added method: 
 	void OnControllerColliderHit (ControllerColliderHit other)
@@ -115,14 +152,24 @@ public class PlayerController : MonoBehaviour
         float verticalInput = Input.GetAxisRaw("Vertical" + m_PlayerInputString);
 
 		Vector3 actualMovementDirection = new Vector3 (horizontalInput, 0, verticalInput) + m_PushedDirection;
-		float actualMovementSpeed = m_RunSpeed + m_PushedSpeed;
-
 		m_MovementDirection = actualMovementDirection;
+
+		if (m_MovementDirection != Vector3.zero)
+			m_FaceDirection = m_MovementDirection;
+
+		float actualMovementSpeed = m_RunSpeed + m_PushedSpeed;
 		m_MovementSpeed = actualMovementSpeed;
 
 		// Reset the pushed direction and speed
-		m_PushedDirection = Vector3.zero;
-		m_PushedSpeed = 0.0f;
+		if (m_IsAttacked) 
+		{
+			m_PushedSpeed -= m_Drag;
+
+			if (m_PushedSpeed <= 0.0f)
+				m_IsAttacked = false;
+		} 
+		else
+			ResetPushVelocity ();
     }
 
     void UpdateJumpState()
@@ -133,6 +180,22 @@ public class PlayerController : MonoBehaviour
             Jump();
         }
     }
+
+	// Added method:
+	void UpdateAttack()
+	{
+		if (Input.GetButton ("Fire1" + m_PlayerInputString) && Time.time > m_LastPunchTime + PUNCH_COOLDOWN) 
+		{
+			m_LastPunchTime = Time.time;
+			m_Animator.SetTrigger ("Punch");
+			m_PlayerAttack.ActivateAttack();
+		}
+	}
+
+	public float GetLastPunchTime()
+	{
+		return m_LastPunchTime;
+	}
 
     // Update is called once per frame
     void Update()
@@ -150,6 +213,9 @@ public class PlayerController : MonoBehaviour
         // Update jumping input and apply gravity
         UpdateJumpState();
         ApplyGravity();
+
+		// Added step:
+		UpdateAttack();
 
         // Calculate actual motion
         m_CurrentMovementOffset = (m_MovementDirection * m_MovementSpeed + new Vector3(0, m_VerticalSpeed, 0)) * Time.deltaTime;
@@ -205,7 +271,14 @@ public class PlayerController : MonoBehaviour
     void Respawn()
     {
         m_IsAlive = true;
+		ResetPushVelocity ();
         transform.position = m_SpawningPosition;
         transform.rotation = Quaternion.Euler(0.0f, 180.0f, 0.0f);
     }
+
+	void ResetPushVelocity()
+	{
+		m_PushedDirection = Vector3.zero;
+		m_PushedSpeed = 0.0f;
+	}
 }
