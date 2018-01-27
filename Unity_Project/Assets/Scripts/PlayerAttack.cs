@@ -2,15 +2,20 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PlayerAttack : MonoBehaviour {
+public class PlayerAttack : MonoBehaviour 
+{
+	// ----------------------------------------------------------
 
 	public float m_Strength = 1.5f;
+
+	// ----------------------------------------------------------
 
 	bool m_IsAttack = false;
 	float m_AttackTime = 0.1f;
 
 	PlayerController m_ParentPlayer;
 
+	// ----------------------------------------------------------
 	void Awake()
 	{
 		m_ParentPlayer = GetComponentInParent<PlayerController> ();

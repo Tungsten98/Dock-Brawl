@@ -28,10 +28,16 @@ public class PlayerController : MonoBehaviour
 	// Added field: 
 	public float m_Drag = 0.5f;
 
+	// Added field:
+	public bool m_IsAI = false;
+
     // --------------------------------------------------------------
 
     // The charactercontroller of the player
     CharacterController m_CharacterController;
+
+	// Added field:
+	GameObject[] m_AllPlayers;
 
 	// Added field:
 	Animator m_Animator;
@@ -72,6 +78,10 @@ public class PlayerController : MonoBehaviour
 	// Added field:
 	bool m_IsAttacked = false;
 
+	// Added fields: To check whether the AI player is near the map bounds, and on which section
+	bool m_AIIsNearOOB = false;
+	Collider m_OOBMeshCollider;
+
 	// Added fields:
 	const float PUNCH_COOLDOWN = 0.5f;
 	float m_LastPunchTime = 0.0f;
@@ -87,6 +97,7 @@ public class PlayerController : MonoBehaviour
         m_CharacterController = GetComponent<CharacterController>();
 		m_Animator = GetComponent<Animator> ();
 		m_PlayerAttack = GetComponentInChildren<PlayerAttack> ();
+		m_AllPlayers = GameObject.FindGameObjectsWithTag ("Player");
     }
 
     // Use this for initialization
@@ -145,14 +156,29 @@ public class PlayerController : MonoBehaviour
 		}
 	}
 
+	// Added method:
+	void OnControllerColliderStay(ControllerColliderHit other)
+	{
+		if (other.gameObject.CompareTag ("OutOfBounds") && m_IsAI) 
+		{
+			m_AIIsNearOOB = true;
+			m_OOBMeshCollider = other.collider;
+		}
+	}
+
+	// Added method:
+	void OnControllerColliderExit(ControllerColliderHit other)
+	{
+		if (other.gameObject.CompareTag ("OutOfBounds") && m_IsAI) 
+		{
+			m_AIIsNearOOB = false;
+			m_OOBMeshCollider = null;
+		}
+	}
+
     void UpdateMovementState()
     {
-        // Get Player's movement input and determine direction and set run speed
-        float horizontalInput = Input.GetAxisRaw("Horizontal" + m_PlayerInputString);
-        float verticalInput = Input.GetAxisRaw("Vertical" + m_PlayerInputString);
-
-		Vector3 actualMovementDirection = new Vector3 (horizontalInput, 0, verticalInput) + m_PushedDirection;
-		m_MovementDirection = actualMovementDirection;
+		m_MovementDirection = m_IsAI ? UpdateAIMovement() + m_PushedDirection : UpdatePlayerMovement() + m_PushedDirection;
 
 		if (m_MovementDirection != Vector3.zero)
 			m_FaceDirection = m_MovementDirection;
@@ -171,6 +197,77 @@ public class PlayerController : MonoBehaviour
 		else
 			ResetPushVelocity ();
     }
+
+	// Added method:
+	Vector3 UpdatePlayerMovement()
+	{
+		// Get Player's movement input and determine direction and set run speed
+		float horizontalInput = Input.GetAxisRaw("Horizontal" + m_PlayerInputString);
+		float verticalInput = Input.GetAxisRaw("Vertical" + m_PlayerInputString);
+
+		return new Vector3 (horizontalInput, 0, verticalInput);
+	}
+
+	// Added method: 
+	Vector3 UpdateAIMovement()
+	{
+		// Find the closest player
+		Vector3[] offsetsFromEachPlayer = new Vector3[m_AllPlayers.Length];
+		for (int playerIndex = 0; playerIndex < m_AllPlayers.Length; playerIndex++) 
+		{
+			PlayerController currentPlayerController = m_AllPlayers[playerIndex].GetComponent<PlayerController> ();
+			offsetsFromEachPlayer [playerIndex] = currentPlayerController.transform.position - transform.position;
+		}
+
+		int unsortedLength = offsetsFromEachPlayer.Length;
+		bool magnitudesSwapped;
+		do {
+			magnitudesSwapped = false;
+			for (int swapIndex = 0; swapIndex < unsortedLength - 1; swapIndex++) 
+			{
+				if (offsetsFromEachPlayer [swapIndex].magnitude > offsetsFromEachPlayer [swapIndex + 1].magnitude) 
+				{
+					Vector3 offsetBuffer = offsetsFromEachPlayer [swapIndex];
+					offsetsFromEachPlayer [swapIndex] = offsetsFromEachPlayer [swapIndex + 1];
+					offsetsFromEachPlayer [swapIndex + 1] = offsetBuffer;
+					magnitudesSwapped = true;
+				}
+			}
+			unsortedLength--;
+		} while (!magnitudesSwapped);
+
+		// Note: closest distance will be in index 1 after the swap as index 0 would refer to the current player itself
+		// Set the horizontal and vertical movement direction based on the distance
+		Vector3 movementDirection = Vector3.zero;
+
+		if (offsetsFromEachPlayer [1].x > 0)
+			movementDirection.x = 1;
+		else if (offsetsFromEachPlayer [1].x < 0)
+			movementDirection.x = -1;
+		
+		if (offsetsFromEachPlayer [1].z > 0)
+			movementDirection.z = 1;
+		else if (offsetsFromEachPlayer [1].z < 0)
+			movementDirection.z = -1;
+
+		// Avoid the OOB quad colliders, move out of them if necessary
+		if (m_AIIsNearOOB && m_OOBMeshCollider != null) 
+		{
+			Vector3 distanceToBoundsCentre = m_OOBMeshCollider.bounds.center - transform.position;
+
+			if (offsetsFromEachPlayer [1].x > 0 && distanceToBoundsCentre.x > 0)
+				movementDirection.x = 0;
+			else if (offsetsFromEachPlayer [1].x < 0 && distanceToBoundsCentre.x < 0)
+				movementDirection.x = 0;
+
+			if (offsetsFromEachPlayer [1].z > 0 && distanceToBoundsCentre.z > 0)
+				movementDirection.z = 0;
+			else if (offsetsFromEachPlayer [1].z < 0 && distanceToBoundsCentre.z < 0)
+				movementDirection.z = 0;
+		}
+
+		return movementDirection;
+	}
 
     void UpdateJumpState()
     {
