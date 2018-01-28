@@ -6,13 +6,16 @@ public class PlayerAttack : MonoBehaviour
 {
 	// ----------------------------------------------------------
 
+	// The strength of the punch
 	public float m_Strength = 1.5f;
 
 	// ----------------------------------------------------------
 
+	// To ensure the other player is attacked only once per contact
 	bool m_IsAttack = false;
 	float m_AttackTime = 0.1f;
 
+	// The parent player
 	PlayerController m_ParentPlayer;
 
 	// ----------------------------------------------------------
@@ -21,6 +24,7 @@ public class PlayerAttack : MonoBehaviour
 		m_ParentPlayer = GetComponentInParent<PlayerController> ();
 	}
 
+	// Attack the other player if this player is close enough and can attack
 	void OnTriggerEnter(Collider other)
 	{
 		Attack (other);

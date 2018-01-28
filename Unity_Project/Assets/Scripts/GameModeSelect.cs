@@ -7,23 +7,37 @@ public class GameModeSelect : MonoBehaviour
 {
 	// -------------------------------------------------
 
+	// The game modes
 	public enum GameModes
 	{
 		FIRST_TO_SCORE,
-		BEST_IN_TIME
+		SCORE_IN_TIME
 	}
+	int m_GameModesEnumSize = 2;
 
-	UIManager m_MainUIManager;
+	// The current game mode
 	public GameModes m_CurrentGameMode;
+
+	// References to the property selection interfaces
 	public GameObject[] m_GameModeSelectInterface;
 
+	// References to the game mode toggles
+	public Toggle[] m_GameModeToggles;
+
+	// -------------------------------------------------
+
 	// Local variables to send off to the UIManager
-	public class UIManagerInfo
+	class UIManagerInfo
 	{
 		public int m_MaxScore = 10;
 		public int m_GameTimeInSeconds = 60;
 	}
-	public UIManagerInfo m_UIManagerInfo;
+
+	// The UIManager that will take this information to load the appropriate game
+	UIManager m_MainUIManager;
+
+	// An instance of the information to send to the UIManager
+	UIManagerInfo m_UIManagerInfo;
 
 	// -------------------------------------------------
 
@@ -40,21 +54,17 @@ public class GameModeSelect : MonoBehaviour
 
 	void Update()
 	{
-		switch (m_CurrentGameMode) {
-
-		case GameModes.FIRST_TO_SCORE:
-			m_GameModeSelectInterface [0].SetActive (true);
-			break;
-
-		default:
-			m_GameModeSelectInterface [0].SetActive (false);
-			break;
+		// Check for which game mode is enabled, and load the appropriate settings interface
+		for (int gameModeIndex = 0; gameModeIndex < m_GameModesEnumSize; gameModeIndex++) 
+		{
+			m_GameModeToggles [gameModeIndex].isOn = (GameModes) gameModeIndex == m_CurrentGameMode;
+			m_GameModeSelectInterface [gameModeIndex].SetActive ((GameModes) gameModeIndex == m_CurrentGameMode);
 		}
 	}
 
-	public void TriggerModeChange()
+	public void ChangeGameMode(int gameMode)
 	{
-
+		m_CurrentGameMode = (GameModes) gameMode;
 	}
 
 	// Update the maximum score when the user updates information in the UI 
@@ -91,11 +101,48 @@ public class GameModeSelect : MonoBehaviour
 		inputField.text = "" + m_UIManagerInfo.m_MaxScore;
 	}
 
+	// Update the time limit when the user updates information in the UI 
+	public void ChangeTimeLimit(string value)
+	{
+		int valueAsInt = 0;
+		int.TryParse (value, out valueAsInt);
+
+		if (valueAsInt < 30)
+			m_UIManagerInfo.m_GameTimeInSeconds = 30;
+		else if (valueAsInt > 120)
+			m_UIManagerInfo.m_GameTimeInSeconds = 120;
+		else
+			m_UIManagerInfo.m_GameTimeInSeconds = valueAsInt;
+
+		UpdateTimeLimitUI();
+	}
+
+	public void ChangeTimeLimit(int sign)
+	{
+		m_UIManagerInfo.m_GameTimeInSeconds += sign;
+
+		if (m_UIManagerInfo.m_GameTimeInSeconds < 30)
+			m_UIManagerInfo.m_GameTimeInSeconds = 30;
+		else if (m_UIManagerInfo.m_GameTimeInSeconds > 120)
+			m_UIManagerInfo.m_GameTimeInSeconds = 120;
+
+		UpdateTimeLimitUI();
+	}
+
+	void UpdateTimeLimitUI()
+	{
+		InputField inputField = GetComponentInChildren<InputField> ();
+		inputField.text = "" + m_UIManagerInfo.m_GameTimeInSeconds;
+	}
+
+	// Send the information to the UIManager to process and load the appropriate game
 	public void SendGameModeInfo()
 	{
-		m_MainUIManager.m_currentGameMode = m_CurrentGameMode;
+		m_MainUIManager.m_CurrentGameMode = m_CurrentGameMode;
 
 		if (m_CurrentGameMode == GameModes.FIRST_TO_SCORE)
 			m_MainUIManager.m_WinScore = m_UIManagerInfo.m_MaxScore;
+		else if (m_CurrentGameMode == GameModes.SCORE_IN_TIME)
+			m_MainUIManager.m_TimeLimit = (float) m_UIManagerInfo.m_GameTimeInSeconds;
 	}
 }

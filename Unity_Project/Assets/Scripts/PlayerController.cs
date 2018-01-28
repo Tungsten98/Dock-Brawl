@@ -25,10 +25,10 @@ public class PlayerController : MonoBehaviour
     [SerializeField]
     string m_PlayerInputString = "_P1";
 
-	// Added field: 
+	// The drag on the character when pushed
 	public float m_Drag = 0.5f;
 
-	// Added field:
+	// DEV STAGE: Is the player an AI
 	public bool m_IsAI = false;
 
     // --------------------------------------------------------------
@@ -36,19 +36,19 @@ public class PlayerController : MonoBehaviour
     // The charactercontroller of the player
     CharacterController m_CharacterController;
 
-	// Added field:
-	GameObject[] m_AllPlayers;
+	// DEV STAGE: The other players on the game area, used for AI calculations
+	GameObject[] m_OtherPlayers;
 
-	// Added field:
+	// Animator for the punching animation
 	Animator m_Animator;
 
-	// Added field:
+	// Reference to script for punching
 	PlayerAttack m_PlayerAttack;
 
     // The current movement direction in x & z.
     Vector3 m_MovementDirection = Vector3.zero;
 
-	// Added field:
+	// The direction in which the player looks at
 	Vector3 m_FaceDirection = Vector3.zero;
 
     // The current movement speed
@@ -57,10 +57,10 @@ public class PlayerController : MonoBehaviour
     // The current vertical / falling speed
     float m_VerticalSpeed = 0.0f;
 
-	// Added field:
+	// The direction of travel of the player when pushed
 	Vector3 m_PushedDirection = Vector3.zero;
 
-	// Added field:
+	// The speed of travel of the player when pushed
 	float m_PushedSpeed = 0.0f;
 
     // The current movement offset
@@ -72,17 +72,17 @@ public class PlayerController : MonoBehaviour
     // Whether the player is alive or not
     bool m_IsAlive = true;
 
-	// Added field: To ensure that the push is only evaluated once (fixed irregular movement bug from jumping)
+	// To ensure that the push is only evaluated once (fixed irregular movement bug from jumping)
 	bool m_HasCollidedWithPlayer = false;
 
-	// Added field:
+	// Is the player attacked?
 	bool m_IsAttacked = false;
 
-	// Added fields: To check whether the AI player is near the map bounds, and on which section
+	// DEV STAGE: To check whether the AI player is near the map bounds, and on which section
 	bool m_AIIsNearOOB = false;
 	Collider m_OOBMeshCollider;
 
-	// Added fields:
+	// DEV STAGE: To regulate the punch rate so that the players cannot continuously punch
 	const float PUNCH_COOLDOWN = 0.5f;
 	float m_LastPunchTime = 0.0f;
 
@@ -97,7 +97,9 @@ public class PlayerController : MonoBehaviour
         m_CharacterController = GetComponent<CharacterController>();
 		m_Animator = GetComponent<Animator> ();
 		m_PlayerAttack = GetComponentInChildren<PlayerAttack> ();
-		m_AllPlayers = GameObject.FindGameObjectsWithTag ("Player");
+
+		// DEV STAGE
+		m_OtherPlayers = GameObject.FindGameObjectsWithTag ("Player");
     }
 
     // Use this for initialization
@@ -121,23 +123,20 @@ public class PlayerController : MonoBehaviour
         m_VerticalSpeed = Mathf.Min(m_VerticalSpeed, m_MaxFallSpeed);
     }
 
-	// Added method:
+	// If P1's fist collides with P2, push P2 and vice versa
 	public void PushBackFromAttack(Vector3 pushDirection, float pushStrength)
 	{
 		m_IsAttacked = true;
 		m_PushedDirection = pushDirection;
-
-		// We treat m_RunSpeed as 1 unit of speed
 		m_PushedSpeed = m_RunSpeed * pushStrength;
 	}
-
-	// Added method:
+		
 	public Vector3 GetCurrentFaceDirection()
 	{
 		return m_FaceDirection;
 	}
 
-	// Added method: 
+	// Push the other player if they collide
 	void OnControllerColliderHit (ControllerColliderHit other)
 	{
 		if (!other.gameObject.CompareTag ("Player")) 
@@ -156,7 +155,7 @@ public class PlayerController : MonoBehaviour
 		}
 	}
 
-	// Added method:
+	// DEV STAGE: To check if the AI is near the platform edge
 	void OnControllerColliderStay(ControllerColliderHit other)
 	{
 		if (other.gameObject.CompareTag ("OutOfBounds") && m_IsAI) 
@@ -166,7 +165,7 @@ public class PlayerController : MonoBehaviour
 		}
 	}
 
-	// Added method:
+	// DEV STAGE: To check if the AI is no longer near the platform edge
 	void OnControllerColliderExit(ControllerColliderHit other)
 	{
 		if (other.gameObject.CompareTag ("OutOfBounds") && m_IsAI) 
@@ -178,7 +177,8 @@ public class PlayerController : MonoBehaviour
 
     void UpdateMovementState()
     {
-		m_MovementDirection = m_IsAI ? UpdateAIMovement() + m_PushedDirection : UpdatePlayerMovement() + m_PushedDirection;
+		// Stun player when attacked
+		m_MovementDirection = m_IsAttacked ? m_PushedDirection : (m_IsAI ? UpdateAIMovement () : UpdatePlayerMovement ());
 
 		if (m_MovementDirection != Vector3.zero)
 			m_FaceDirection = m_MovementDirection;
@@ -198,24 +198,26 @@ public class PlayerController : MonoBehaviour
 			ResetPushVelocity ();
     }
 
-	// Added method:
+	// Moved player input movement logic here
 	Vector3 UpdatePlayerMovement()
 	{
 		// Get Player's movement input and determine direction and set run speed
 		float horizontalInput = Input.GetAxisRaw("Horizontal" + m_PlayerInputString);
 		float verticalInput = Input.GetAxisRaw("Vertical" + m_PlayerInputString);
 
-		return new Vector3 (horizontalInput, 0, verticalInput);
+		return new Vector3 (horizontalInput, 0, verticalInput) + m_PushedDirection;
 	}
 
-	// Added method: 
+	// DEV STAGE: An attempt at modelling movement for the AI
+	// Idea was to have the AI move like the player, and pursuit the player if not near the platform edge
+	// Otherwise move away from the edge
 	Vector3 UpdateAIMovement()
 	{
 		// Find the closest player
-		Vector3[] offsetsFromEachPlayer = new Vector3[m_AllPlayers.Length];
-		for (int playerIndex = 0; playerIndex < m_AllPlayers.Length; playerIndex++) 
+		Vector3[] offsetsFromEachPlayer = new Vector3[m_OtherPlayers.Length];
+		for (int playerIndex = 0; playerIndex < m_OtherPlayers.Length; playerIndex++) 
 		{
-			PlayerController currentPlayerController = m_AllPlayers[playerIndex].GetComponent<PlayerController> ();
+			PlayerController currentPlayerController = m_OtherPlayers[playerIndex].GetComponent<PlayerController> ();
 			offsetsFromEachPlayer [playerIndex] = currentPlayerController.transform.position - transform.position;
 		}
 
@@ -266,7 +268,7 @@ public class PlayerController : MonoBehaviour
 				movementDirection.z = 0;
 		}
 
-		return movementDirection;
+		return movementDirection + m_PushedDirection;
 	}
 
     void UpdateJumpState()
@@ -278,7 +280,7 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-	// Added method:
+	// Punching cooldown
 	void UpdateAttack()
 	{
 		if (Input.GetButton ("Fire1" + m_PlayerInputString) && Time.time > m_LastPunchTime + PUNCH_COOLDOWN) 
@@ -311,7 +313,7 @@ public class PlayerController : MonoBehaviour
         UpdateJumpState();
         ApplyGravity();
 
-		// Added step:
+		// Update punching cooldown
 		UpdateAttack();
 
         // Calculate actual motion
@@ -365,7 +367,8 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-    void Respawn()
+	// Changed to public so that pressing start game button will reset their positions
+    public void Respawn()
     {
         m_IsAlive = true;
 		ResetPushVelocity ();
